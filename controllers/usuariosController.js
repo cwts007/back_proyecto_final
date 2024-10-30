@@ -23,7 +23,25 @@ exports.getUsuarios = async (req, res) => {
 exports.registerUsuario = async (req, res) => {
     const { nombre, apellido, rut, correo, password, tipo } = req.body;
     try {
-        console.log("Registrando nuevo usuario:", { nombre, apellido, rut, correo, tipo });
+        console.log("Intento de registro de usuario:", { nombre, apellido, rut, correo, tipo });
+
+        // Verifica si el `rut` ya existe
+        const { data: existingUser, error: checkError } = await supabase
+            .from('usuarios')
+            .select('*')
+            .eq('rut', rut)
+            .single();
+
+        if (checkError && checkError.code !== 'PGRST116') {
+            console.error("Error al verificar existencia de rut:", checkError);
+            return res.status(500).json({ error: 'Error interno al verificar el rut' });
+        }
+
+        if (existingUser) {
+            console.warn("Intento de registro con rut duplicado:", rut);
+            return res.status(400).json({ error: `El rut ${rut} ya está registrado` });
+        }
+
         const hashedPassword = await bcrypt.hash(password, 10);
         console.log("Contraseña encriptada");
 
@@ -36,8 +54,9 @@ exports.registerUsuario = async (req, res) => {
             console.error("Error en la inserción de usuario:", error);
             throw new Error("Error al insertar el nuevo usuario en la base de datos");
         }
+
         console.log("Usuario registrado exitosamente:", data);
-        res.status(201).json(data);
+        res.status(201).json({ message: "Usuario registrado exitosamente", user: data });
     } catch (error) {
         console.error('Error al registrar usuario:', error.message);
         res.status(500).json({ error: 'Error al registrar usuario' });
