@@ -86,9 +86,19 @@ exports.loginUsuario = async (req, res) => {
             return res.status(401).json({ error: 'Credenciales inválidas' });
         }
 
-        const token = jwt.sign({ id: usuario.id }, process.env.JWT_SECRET, { expiresIn: '1h' });
+        // Incluimos el nombre y tipo en el payload del token y también en la respuesta
+        const token = jwt.sign(
+            { id: usuario.id, nombre: usuario.nombre, tipo: usuario.tipo },
+            process.env.JWT_SECRET,
+            { expiresIn: '1h' }
+        );
         console.log("Inicio de sesión exitoso, token generado");
-        res.json({ token });
+
+        // Enviamos el token y los detalles relevantes del usuario
+        res.json({
+            token,
+            usuario: { id: usuario.id, nombre: usuario.nombre, tipo: usuario.tipo }
+        });
     } catch (error) {
         console.error('Error al iniciar sesión:', error.message);
         res.status(500).json({ error: 'Error al iniciar sesión' });
