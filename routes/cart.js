@@ -1,12 +1,12 @@
 const express = require('express');
-const { addToCart, getCartByUser, removeFromCart, clearCart } = require('../controllers/cartController');
+const { addToCart, getCart, removeFromCart } = require('../controllers/cartController');
+const authenticate = require('../middleware/authenticate'); // Middleware de autenticación
 
 const router = express.Router();
 
-// Rutas
-router.post('/', addToCart);
-router.get('/:userId', getCartByUser);
-router.delete('/:userId/:productId', removeFromCart);
-router.delete('/:userId', clearCart);
+// Rutas del carrito protegidas por el middleware
+router.post('/', authenticate, addToCart);
+router.get('/', authenticate, getCart);
+router.delete('/:id', authenticate, removeFromCart);
 
-module.exports = router; // Asegúrate de que sea `module.exports`
+module.exports = router;

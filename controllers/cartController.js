@@ -1,66 +1,103 @@
-const { Pool } = require('pg');
+const supabase = require('../db');
 
-const pool = new Pool({
-    connectionString: process.env.SUPABASE_URL,
-    ssl: { rejectUnauthorized: false }
-});
-
-// Agregar un producto al carrito
+// Agregar producto al carrito
 exports.addToCart = async (req, res) => {
-    const { userId, productId, quantity } = req.body;
+    const { productId, quantity } = req.body;
 
     try {
-        const result = await pool.query(
-            'INSERT INTO cart (user_id, product_id, quantity) VALUES ($1, $2, $3) ON CONFLICT (user_id, product_id) DO UPDATE SET quantity = cart.quantity + $3 RETURNING *',
-            [userId, productId, quantity]
-        );
-        res.status(201).json(result.rows[0]);
-    } catch (error) {
-        res.status(500).json({ message: 'Error al agregar el producto al carrito.' });
-    }
-};
+        const userId = req.user.id; // Obtener el ID del usuario autenticado
+        console.log('Usuario autenticado:', userId);
 
-// Obtener el carrito de un usuario
-exports.getCartByUser = async (req, res) => {
-    const { userId } = req.params;
+        // Verificar si el producto ya está en el carrito
+        const { data: existingCartItem, error: fetchError } = await supabase
+            .from('cart')
+            .select('*')
+            .eq('user_id', userId)
+            .eq('product_id', productId)
+            .single();
 
-    try {
-        const result = await pool.query(
-            'SELECT c.id, p.name, p.price, c.quantity FROM cart c JOIN products p ON c.product_id = p.id WHERE c.user_id = $1',
-            [userId]
-        );
-        res.status(200).json(result.rows);
-    } catch (error) {
-        res.status(500).json({ message: 'Error al obtener el carrito.' });
-    }
-};
-
-// Eliminar un producto del carrito
-exports.removeFromCart = async (req, res) => {
-    const { userId, productId } = req.params;
-
-    try {
-        const result = await pool.query(
-            'DELETE FROM cart WHERE user_id = $1 AND product_id = $2 RETURNING *',
-            [userId, productId]
-        );
-        if (result.rows.length === 0) {
-            return res.status(404).json({ message: 'Producto no encontrado en el carrito.' });
+        if (fetchError && fetchError.code !== 'PGRST116') {
+            console.error('Error al buscar producto en el carrito:', fetchError);
+            return res.status(500).json({ message: 'Error al buscar producto en el carrito.' });
         }
+
+        if (existingCartItem) {
+            // Si ya está en el carrito, actualiza la cantidad
+            const newQuantity = existingCartItem.quantity + quantity;
+            const { error: updateError } = await supabase
+                .from('cart')
+                .update({ quantity: newQuantity })
+                .eq('id', existingCartItem.id);
+
+            if (updateError) {
+                console.error('Error al actualizar la cantidad del producto:', updateError);
+                return res.status(500).json({ message: 'Error al actualizar la cantidad del producto en el carrito.' });
+            }
+
+            return res.status(200).json({ message: 'Cantidad del producto actualizada en el carrito.' });
+        }
+
+        // Si no está en el carrito, agregarlo
+        const { data: newCartItem, error: insertError } = await supabase
+            .from('cart')
+            .insert([{ user_id: userId, product_id: productId, quantity }])
+            .select()
+            .single();
+
+        if (insertError) {
+            console.error('Error al agregar producto al carrito:', insertError);
+            return res.status(500).json({ message: 'Error al agregar producto al carrito.' });
+        }
+
+        res.status(201).json({ message: 'Producto agregado al carrito.', cartItem: newCartItem });
+    } catch (error) {
+        console.error('Error al procesar la solicitud:', error.message);
+        res.status(500).json({ message: 'Error al procesar la solicitud.' });
+    }
+};
+
+// Obtener contenido del carrito
+exports.getCart = async (req, res) => {
+    const userId = req.user.id; // Obtener el ID del usuario autenticado
+
+    try {
+        const { data: cartItems, error } = await supabase
+            .from('cart')
+            .select('id, product_id, quantity, products(name, description, price)')
+            .eq('user_id', userId);
+
+        if (error) {
+            console.error('Error al obtener el contenido del carrito:', error);
+            return res.status(500).json({ message: 'Error al obtener el contenido del carrito.' });
+        }
+
+        res.status(200).json(cartItems);
+    } catch (error) {
+        console.error('Error al procesar la solicitud:', error.message);
+        res.status(500).json({ message: 'Error al procesar la solicitud.' });
+    }
+};
+
+// Eliminar producto del carrito
+exports.removeFromCart = async (req, res) => {
+    const { id } = req.params;
+    const userId = req.user.id; // Obtener el ID del usuario autenticado
+
+    try {
+        const { error } = await supabase
+            .from('cart')
+            .delete()
+            .eq('id', id)
+            .eq('user_id', userId);
+
+        if (error) {
+            console.error('Error al eliminar producto del carrito:', error);
+            return res.status(500).json({ message: 'Error al eliminar producto del carrito.' });
+        }
+
         res.status(200).json({ message: 'Producto eliminado del carrito.' });
     } catch (error) {
-        res.status(500).json({ message: 'Error al eliminar el producto del carrito.' });
-    }
-};
-
-// Vaciar el carrito
-exports.clearCart = async (req, res) => {
-    const { userId } = req.params;
-
-    try {
-        await pool.query('DELETE FROM cart WHERE user_id = $1', [userId]);
-        res.status(200).json({ message: 'Carrito vaciado exitosamente.' });
-    } catch (error) {
-        res.status(500).json({ message: 'Error al vaciar el carrito.' });
+        console.error('Error al procesar la solicitud:', error.message);
+        res.status(500).json({ message: 'Error al procesar la solicitud.' });
     }
 };

@@ -1,39 +1,50 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const { Pool } = require('pg');
-
-const pool = new Pool({
-    connectionString: process.env.SUPABASE_URL,
-    ssl: { rejectUnauthorized: false }
-});
+const supabase = require('../db');
 
 // Registrar un nuevo usuario
 exports.register = async (req, res) => {
     const { name, email, password } = req.body;
 
     try {
-        console.log('Registrando nuevo usuario:', { name, email });
+        console.log('--- Intentando registrar un usuario ---');
+        console.log('Datos recibidos:', { name, email, password });
 
         // Verificar si el email ya está registrado
-        const userExists = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
-        console.log('Consulta de usuario existente:', userExists.rows);
+        const { data: existingUser, error: fetchError } = await supabase
+            .from('users')
+            .select('*')
+            .eq('email', email)
+            .single();
 
-        if (userExists.rows.length > 0) {
+        if (fetchError && fetchError.code !== 'PGRST116') {
+            console.error('Error al verificar el usuario existente:', fetchError);
+            return res.status(500).json({ message: 'Error al verificar el usuario existente.' });
+        }
+
+        if (existingUser) {
+            console.error('El email ya está registrado:', email);
             return res.status(400).json({ message: 'El email ya está registrado.' });
         }
 
         // Encriptar contraseña
         const hashedPassword = await bcrypt.hash(password, 10);
-        console.log('Contraseña encriptada generada.');
+        console.log('Contraseña encriptada generada:', hashedPassword);
 
         // Insertar el usuario en la base de datos
-        const result = await pool.query(
-            'INSERT INTO users (name, email, password) VALUES ($1, $2, $3) RETURNING id, name, email',
-            [name, email, hashedPassword]
-        );
+        const { data: newUser, error: insertError } = await supabase
+            .from('users')
+            .insert([{ name, email, password: hashedPassword }])
+            .select()
+            .single();
 
-        console.log('Usuario registrado exitosamente:', result.rows[0]);
-        res.status(201).json({ message: 'Usuario registrado exitosamente.', user: result.rows[0] });
+        if (insertError) {
+            console.error('Error al registrar el usuario:', insertError);
+            return res.status(500).json({ message: 'Error al registrar el usuario.' });
+        }
+
+        console.log('Usuario registrado exitosamente:', newUser);
+        res.status(201).json({ message: 'Usuario registrado exitosamente.', user: newUser });
     } catch (error) {
         console.error('Error al registrar el usuario:', error.message);
         res.status(500).json({ message: 'Error al registrar el usuario.' });
@@ -45,19 +56,24 @@ exports.login = async (req, res) => {
     const { email, password } = req.body;
 
     try {
-        console.log('Intentando iniciar sesión con email:', email);
+        console.log('--- Intentando iniciar sesión ---');
+        console.log('Email recibido:', email);
 
         // Buscar al usuario por email
-        const user = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
-        console.log('Resultado de la consulta de usuario:', user.rows);
+        const { data: user, error: fetchError } = await supabase
+            .from('users')
+            .select('*')
+            .eq('email', email)
+            .single();
 
-        if (user.rows.length === 0) {
-            console.error('Usuario no encontrado. Email:', email);
+        if (fetchError) {
+            console.error('Error al buscar usuario:', fetchError);
             return res.status(404).json({ message: 'Usuario no encontrado.' });
         }
 
         // Verificar la contraseña
-        const isValidPassword = await bcrypt.compare(password, user.rows[0].password);
+        console.log('Contraseña almacenada (hash):', user.password);
+        const isValidPassword = await bcrypt.compare(password, user.password);
         console.log('¿Contraseña válida?', isValidPassword);
 
         if (!isValidPassword) {
@@ -66,8 +82,8 @@ exports.login = async (req, res) => {
         }
 
         // Generar un token JWT
-        const token = jwt.sign({ id: user.rows[0].id }, process.env.JWT_SECRET, { expiresIn: '1h' });
-        console.log('Token generado:', token);
+        const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, { expiresIn: '1h' });
+        console.log('Token generado exitosamente:', token);
 
         res.status(200).json({ message: 'Inicio de sesión exitoso.', token });
     } catch (error) {
@@ -75,7 +91,6 @@ exports.login = async (req, res) => {
         res.status(500).json({ message: 'Error al iniciar sesión.' });
     }
 };
-
 
 // Obtener perfil
 exports.getProfile = async (req, res) => {
@@ -89,14 +104,18 @@ exports.getProfile = async (req, res) => {
             return res.status(401).json({ message: 'Token no válido o usuario no autenticado.' });
         }
 
-        const user = await pool.query('SELECT id, name, email, created_at FROM users WHERE id = $1', [userId]);
-        console.log('Resultado de la consulta del perfil:', user.rows);
+        const { data: user, error: fetchError } = await supabase
+            .from('users')
+            .select('id, name, email, created_at')
+            .eq('id', userId)
+            .single();
 
-        if (user.rows.length === 0) {
+        if (fetchError) {
+            console.error('Error al buscar usuario:', fetchError);
             return res.status(404).json({ message: 'Usuario no encontrado.' });
         }
 
-        res.status(200).json(user.rows[0]);
+        res.status(200).json(user);
     } catch (error) {
         console.error('Error al obtener el perfil del usuario:', error.message);
         res.status(500).json({ message: 'Error al obtener el perfil del usuario.' });
