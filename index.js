@@ -1,13 +1,20 @@
 const express = require('express');
-const app = express();
-const PORT = 3000;
+const cors = require('cors');
+require('dotenv').config();
 
-// Ruta de ejemplo
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+// Middlewares
+app.use(cors());
+app.use(express.json());
+
+// Rutas de prueba
 app.get('/', (req, res) => {
-    res.send('¡Hola, mundo desde Express!');
+    res.send('API Backend funcionando correctamente.');
 });
 
-// Iniciar el servidor
+// Levantar el servidor
 app.listen(PORT, () => {
     console.log(`Servidor corriendo en http://localhost:${PORT}`);
 });
