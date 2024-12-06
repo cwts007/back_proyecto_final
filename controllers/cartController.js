@@ -6,7 +6,6 @@ exports.addToCart = async (req, res) => {
 
     try {
         const userId = req.user.id; // Obtener el ID del usuario autenticado
-        console.log('Usuario autenticado:', userId);
 
         // Verificar si el producto ya está en el carrito
         const { data: existingCartItem, error: fetchError } = await supabase
@@ -63,7 +62,16 @@ exports.getCart = async (req, res) => {
     try {
         const { data: cartItems, error } = await supabase
             .from('cart')
-            .select('id, product_id, quantity, products(name, description, price)')
+            .select(`
+                id, 
+                product_id, 
+                quantity, 
+                products (
+                    name, 
+                    description, 
+                    price
+                )
+            `)
             .eq('user_id', userId);
 
         if (error) {
@@ -96,6 +104,35 @@ exports.removeFromCart = async (req, res) => {
         }
 
         res.status(200).json({ message: 'Producto eliminado del carrito.' });
+    } catch (error) {
+        console.error('Error al procesar la solicitud:', error.message);
+        res.status(500).json({ message: 'Error al procesar la solicitud.' });
+    }
+};
+
+// Actualizar cantidad en el carrito (opcional)
+exports.updateCart = async (req, res) => {
+    const { id } = req.params;
+    const { quantity } = req.body;
+    const userId = req.user.id;
+
+    if (quantity <= 0) {
+        return res.status(400).json({ message: 'La cantidad debe ser mayor a cero.' });
+    }
+
+    try {
+        const { error } = await supabase
+            .from('cart')
+            .update({ quantity })
+            .eq('id', id)
+            .eq('user_id', userId);
+
+        if (error) {
+            console.error('Error al actualizar el carrito:', error);
+            return res.status(500).json({ message: 'Error al actualizar el carrito.' });
+        }
+
+        res.status(200).json({ message: 'Cantidad actualizada correctamente.' });
     } catch (error) {
         console.error('Error al procesar la solicitud:', error.message);
         res.status(500).json({ message: 'Error al procesar la solicitud.' });
