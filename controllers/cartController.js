@@ -2,11 +2,15 @@ const supabase = require('../db');
 
 // Agregar producto al carrito
 exports.addToCart = async (req, res) => {
-    const { productId, quantity } = req.body;
+    const productId = parseInt(req.body.productId, 10);
+    const quantity = parseInt(req.body.quantity, 10);
+    const userId = parseInt(req.user.id, 10);
+
+    if (isNaN(productId) || isNaN(quantity) || isNaN(userId)) {
+        return res.status(400).json({ message: 'Datos inválidos.' });
+    }
 
     try {
-        const userId = req.user.id; // Obtener el ID del usuario autenticado
-
         // Verificar si el producto ya está en el carrito
         const { data: existingCartItem, error: fetchError } = await supabase
             .from('cart')
@@ -57,7 +61,11 @@ exports.addToCart = async (req, res) => {
 
 // Obtener contenido del carrito
 exports.getCart = async (req, res) => {
-    const userId = req.user.id; // Obtener el ID del usuario autenticado
+    const userId = parseInt(req.user.id, 10);
+
+    if (isNaN(userId)) {
+        return res.status(400).json({ message: 'ID de usuario inválido.' });
+    }
 
     try {
         const { data: cartItems, error } = await supabase
@@ -88,8 +96,12 @@ exports.getCart = async (req, res) => {
 
 // Eliminar producto del carrito
 exports.removeFromCart = async (req, res) => {
-    const { id } = req.params;
-    const userId = req.user.id; // Obtener el ID del usuario autenticado
+    const id = parseInt(req.params.id, 10);
+    const userId = parseInt(req.user.id, 10);
+
+    if (isNaN(id) || isNaN(userId)) {
+        return res.status(400).json({ message: 'Datos inválidos.' });
+    }
 
     try {
         const { error } = await supabase
@@ -104,35 +116,6 @@ exports.removeFromCart = async (req, res) => {
         }
 
         res.status(200).json({ message: 'Producto eliminado del carrito.' });
-    } catch (error) {
-        console.error('Error al procesar la solicitud:', error.message);
-        res.status(500).json({ message: 'Error al procesar la solicitud.' });
-    }
-};
-
-// Actualizar cantidad en el carrito (opcional)
-exports.updateCart = async (req, res) => {
-    const { id } = req.params;
-    const { quantity } = req.body;
-    const userId = req.user.id;
-
-    if (quantity <= 0) {
-        return res.status(400).json({ message: 'La cantidad debe ser mayor a cero.' });
-    }
-
-    try {
-        const { error } = await supabase
-            .from('cart')
-            .update({ quantity })
-            .eq('id', id)
-            .eq('user_id', userId);
-
-        if (error) {
-            console.error('Error al actualizar el carrito:', error);
-            return res.status(500).json({ message: 'Error al actualizar el carrito.' });
-        }
-
-        res.status(200).json({ message: 'Cantidad actualizada correctamente.' });
     } catch (error) {
         console.error('Error al procesar la solicitud:', error.message);
         res.status(500).json({ message: 'Error al procesar la solicitud.' });
