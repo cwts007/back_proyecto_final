@@ -1,32 +1,13 @@
-const express = require('express');
-const cors = require('cors');
-require('dotenv').config();
+'use strict';
 
-const app = express();
+const WebSocket = require('./lib/websocket');
 
-// Middlewares
-app.use(cors());
-app.use(express.json());
+WebSocket.createWebSocketStream = require('./lib/stream');
+WebSocket.Server = require('./lib/websocket-server');
+WebSocket.Receiver = require('./lib/receiver');
+WebSocket.Sender = require('./lib/sender');
 
-// Importar rutas
-const authRoutes = require('./routes/auth');
-const productRoutes = require('./routes/products');
-const cartRoutes = require('./routes/cart');
+WebSocket.WebSocket = WebSocket;
+WebSocket.WebSocketServer = WebSocket.Server;
 
-// Usar rutas
-app.use('/api/auth', authRoutes);
-app.use('/api/products', productRoutes);
-app.use('/api/cart', cartRoutes);
-
-// Ruta principal para verificar que el servidor funciona
-app.get('/', (req, res) => {
-    res.send('API Backend funcionando correctamente.');
-});
-
-// Manejo de errores 404
-app.use((req, res, next) => {
-    res.status(404).json({ message: 'Recurso no encontrado.' });
-});
-
-// Exportar la app para que Vercel la maneje
-module.exports = app;
+module.exports = WebSocket;
