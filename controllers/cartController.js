@@ -2,15 +2,12 @@ const supabase = require('../db');
 
 // Agregar producto al carrito
 exports.addToCart = async (req, res) => {
-    const productId = parseInt(req.body.productId, 10);
-    const quantity = parseInt(req.body.quantity, 10);
-    const userId = parseInt(req.user.id, 10);
-
-    if (isNaN(productId) || isNaN(quantity) || isNaN(userId)) {
-        return res.status(400).json({ message: 'Datos inválidos.' });
-    }
+    const { productId, quantity } = req.body;
 
     try {
+        const userId = req.user.id; // Obtener el ID del usuario autenticado
+        console.log('Usuario autenticado:', userId);
+
         // Verificar si el producto ya está en el carrito
         const { data: existingCartItem, error: fetchError } = await supabase
             .from('cart')
@@ -61,25 +58,12 @@ exports.addToCart = async (req, res) => {
 
 // Obtener contenido del carrito
 exports.getCart = async (req, res) => {
-    const userId = parseInt(req.user.id, 10);
-
-    if (isNaN(userId)) {
-        return res.status(400).json({ message: 'ID de usuario inválido.' });
-    }
+    const userId = req.user.id; // Obtener el ID del usuario autenticado
 
     try {
         const { data: cartItems, error } = await supabase
             .from('cart')
-            .select(`
-                id, 
-                product_id, 
-                quantity, 
-                products (
-                    name, 
-                    description, 
-                    price
-                )
-            `)
+            .select('id, product_id, quantity, products(name, description, price)')
             .eq('user_id', userId);
 
         if (error) {
@@ -96,12 +80,8 @@ exports.getCart = async (req, res) => {
 
 // Eliminar producto del carrito
 exports.removeFromCart = async (req, res) => {
-    const id = parseInt(req.params.id, 10);
-    const userId = parseInt(req.user.id, 10);
-
-    if (isNaN(id) || isNaN(userId)) {
-        return res.status(400).json({ message: 'Datos inválidos.' });
-    }
+    const { id } = req.params;
+    const userId = req.user.id; // Obtener el ID del usuario autenticado
 
     try {
         const { error } = await supabase
